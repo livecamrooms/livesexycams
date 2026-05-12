@@ -666,22 +666,25 @@
 
   // ── FETCH ────────────────────────────────────────────────────────────────────
   async function fetchRooms() {
+    // Try direct first — Chaturbate's API supports CORS
     try {
-      // Use CORS proxy for GitHub Pages (no server-side proxy available)
-      const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(API_URL)}`);
+      const res = await fetch(API_URL);
       if (!res.ok) throw new Error('API error ' + res.status);
+      const data = await res.json();
+      if (data.results && data.results.length) return data.results;
+      throw new Error('empty');
+    } catch (err) {
+      console.warn('Direct API failed, trying proxy:', err);
+    }
+    // Fallback: CORS proxy
+    try {
+      const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(API_URL)}`);
+      if (!res.ok) throw new Error('Proxy error ' + res.status);
       const data = await res.json();
       return data.results || [];
     } catch (err) {
-      console.error('Fetch error:', err);
-      // Fallback direct attempt
-      try {
-        const res2 = await fetch(API_URL);
-        const data2 = await res2.json();
-        return data2.results || [];
-      } catch {
-        return [];
-      }
+      console.error('All fetch attempts failed:', err);
+      return [];
     }
   }
 
@@ -776,14 +779,15 @@
       return `<span class="card-tag${isHL ? ' highlight' : ''}">${escHtml(t)}</span>`;
     }).join('');
 
-    const thumb = room.thumb || room.img || '';
+    const rawThumb = room.thumb || room.img || '';
+    const thumb = rawThumb ? 'https://wsrv.nl/?url=' + encodeURIComponent(rawThumb) + '&w=320&h=180&fit=cover&output=webp' : '';
     const chatUrl = CHAT_URL(room.username);
     const isHd = (room.is_hd || room.hd) ? '<span class="hd-badge">HD</span>' : '';
 
     div.innerHTML = `
       <a href="${escHtml(chatUrl)}" target="_blank" rel="nofollow noopener" title="Watch ${escHtml(room.username)} live">
         <div class="thumb-wrap">
-          <img src="${escHtml(thumb)}" alt="${escHtml(room.username)} live cam" loading="lazy" referrerpolicy="no-referrer" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 9%22><rect width=%2216%22 height=%229%22 fill=%22%2318181f%22/></svg>'" />
+          <img src="${escHtml(thumb)}" alt="${escHtml(room.username)} live cam" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 9%22><rect width=%2216%22 height=%229%22 fill=%22%2318181f%22/></svg>'" />
           <span class="live-dot">● LIVE</span>
           <span class="viewer-count">${escHtml(String(viewers))}</span>
           ${isHd}
